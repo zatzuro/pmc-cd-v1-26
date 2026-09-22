@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#075ee8">
+  <meta name="description" content="Calendario Directivo de PRISA Media Colombia">
+  <title>Calendario Directivo | PRISA Media Colombia</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="#" aria-label="Calendario Directivo PRISA Media">
+      <span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i><i></i></span>
+      <span><b>PRISA</b><small>MEDIA COLOMBIA</small></span>
+    </a>
+    <div class="product-name">Calendario Directivo</div>
+    <button class="button primary desktop-create" data-action="create"><span>＋</span> Crear evento</button>
+  </header>
+
+  <main class="app-shell">
+    <aside class="filters-panel" id="filtersPanel">
+      <div class="filter-heading">
+        <h2>Filtros</h2>
+        <button class="link-button" data-action="clear-filters">Limpiar filtros</button>
+      </div>
+      <label class="field-label" for="search">Buscar evento</label>
+      <div class="search-wrap"><span aria-hidden="true">⌕</span><input id="search" type="search" placeholder="Nombre del evento"></div>
+      <label class="field-label" for="filterType">Tipo</label>
+      <select id="filterType"><option value="">Todos los tipos</option></select>
+      <label class="field-label" for="filterCommercial">Comercializable</label>
+      <select id="filterCommercial"><option value="">Todos</option><option>Sí</option><option>No</option></select>
+      <label class="field-label" for="filterAvailability">Disponibilidad</label>
+      <select id="filterAvailability"><option value="">Todas</option><option>Disponible</option><option>Cupo lleno</option></select>
+      <div class="legend" id="legend"><h3>Tipos de evento</h3></div>
+      <div class="legend secondary"><span><i class="legend-dot holiday"></i>Festivo</span><span><i class="legend-dot special"></i>Día especial</span></div>
+    </aside>
+
+    <section class="calendar-section" aria-labelledby="monthTitle">
+      <div class="calendar-toolbar">
+        <div class="month-nav">
+          <button class="icon-button" data-action="previous-month" aria-label="Mes anterior">‹</button>
+          <h1 id="monthTitle">Septiembre 2026</h1>
+          <button class="icon-button" data-action="next-month" aria-label="Mes siguiente">›</button>
+        </div>
+        <div class="view-tabs" role="tablist" aria-label="Vista del calendario">
+          <button class="view-tab active" data-view="month" role="tab" aria-selected="true">Mes</button>
+          <button class="view-tab" data-view="agenda" role="tab" aria-selected="false">Lista</button>
+        </div>
+      </div>
+
+      <div id="status" class="status-banner" hidden></div>
+      <div id="loading" class="loading-state"><span></span>Cargando calendario…</div>
+      <div id="calendar" class="calendar" hidden></div>
+      <div id="agenda" class="agenda" hidden></div>
+      <div id="emptyState" class="empty-state" hidden>No hay eventos que coincidan con los filtros.</div>
+    </section>
+  </main>
+
+  <nav class="mobile-nav" aria-label="Navegación móvil">
+    <button data-mobile-view="month" class="active"><span>▦</span>Calendario</button>
+    <button data-mobile-view="agenda"><span>☷</span>Lista</button>
+    <button class="mobile-create" data-action="create" aria-label="Crear evento"><span>＋</span>Crear</button>
+    <button data-action="toggle-filters"><span>▽</span>Filtros</button>
+  </nav>
+
+  <div class="modal-backdrop" id="formModal" hidden>
+    <section class="modal form-modal" role="dialog" aria-modal="true" aria-labelledby="formTitle">
+      <button class="modal-close" data-action="close-form" aria-label="Cerrar">×</button>
+      <h2 id="formTitle">Crear evento</h2>
+      <p class="modal-intro">Completa la información para agregarla al calendario.</p>
+      <form id="eventForm" novalidate>
+        <input type="hidden" id="eventId">
+        <label>Tipo de evento <b>*</b><select id="eventType" required><option value="">Selecciona un tipo</option></select></label>
+        <label>Nombre del evento / acción <b>*</b><input id="eventName" required maxlength="160" placeholder="Ej. Lanzamiento nueva temporada"></label>
+        <div class="form-grid">
+          <label>Fecha de inicio <b>*</b><input id="startDate" type="date" min="2026-09-01" max="2026-12-31" required></label>
+          <label>Fecha de fin <input id="endDate" type="date" min="2026-09-01" max="2026-12-31"><small>Déjala vacía si es de un solo día.</small></label>
+        </div>
+        <fieldset><legend>Comercializable <b>*</b></legend><div class="choice-grid">
+          <label class="choice"><input type="radio" name="commercial" value="Sí" required><span>Sí</span></label>
+          <label class="choice"><input type="radio" name="commercial" value="No"><span>No</span></label>
+        </div></fieldset>
+        <fieldset id="availabilityGroup" hidden><legend>Disponibilidad <b>*</b></legend><div class="choice-grid">
+          <label class="choice available"><input type="radio" name="availability" value="Disponible"><span>Disponible</span></label>
+          <label class="choice full"><input type="radio" name="availability" value="Cupo lleno"><span>Cupo lleno</span></label>
+        </div></fieldset>
+        <label>Descripción / observaciones<textarea id="description" maxlength="500" rows="4" placeholder="Detalles relevantes del evento"></textarea><small class="counter"><span id="descriptionCount">0</span>/500</small></label>
+        <label>Enlace<input id="eventLink" type="url" placeholder="https://"><small>Enlace a más información (opcional).</small></label>
+        <div id="formError" class="form-error" role="alert" hidden></div>
+        <div class="form-actions"><button type="button" class="button secondary" data-action="close-form">Cancelar</button><button type="submit" class="button primary" id="saveButton">Guardar evento</button></div>
+      </form>
+    </section>
+  </div>
+
+  <div class="modal-backdrop" id="detailModal" hidden>
+    <section class="modal detail-modal" role="dialog" aria-modal="true" aria-labelledby="detailTitle">
+      <button class="modal-close" data-action="close-detail" aria-label="Cerrar">×</button>
+      <div id="detailContent"></div>
+    </section>
+  </div>
+
+  <div class="modal-backdrop" id="confirmModal" hidden>
+    <section class="modal confirm-modal" role="alertdialog" aria-modal="true" aria-labelledby="confirmTitle">
+      <div class="delete-icon">⌫</div><h2 id="confirmTitle">¿Eliminar este evento?</h2><p>Esta acción no se puede deshacer.</p>
+      <div class="form-actions"><button class="button secondary" data-action="cancel-delete">Cancelar</button><button class="button danger" data-action="confirm-delete">Eliminar</button></div>
+    </section>
+  </div>
+
+  <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+  <script src="config.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
