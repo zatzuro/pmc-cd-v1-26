@@ -6,7 +6,8 @@
   const DAYS=['Lunes','Martes','Miércoles','Jueves','Viernes','Sábado','Domingo'];
   const COLORS=['#2780e8','#13a05a','#9354d8','#ee8a22','#ee3f83','#e13f44','#385d8c','#13a0a2'];
   const state={month:8,events:[],specialDays:[],config:{tiposEvento:[]},filters:{search:'',type:'',commercial:'',availability:'',specialDays:'__holidays'},view:'month',selected:null,pendingDelete:null};
-  const metrics={apiGetCalls:0,renderCalls:0,loadMs:0};window.__CALENDAR_METRICS=metrics;
+  const metrics={apiGetCalls:0,renderCalls:0,loadMs:0};
+  function syncMetrics(){const d=document.documentElement.dataset;d.apiGetCalls=metrics.apiGetCalls;d.renderCalls=metrics.renderCalls;d.loadMs=metrics.loadMs}
   const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
 
   function isoDate(d){const y=d.getFullYear(),m=String(d.getMonth()+1).padStart(2,'0'),day=String(d.getDate()).padStart(2,'0');return `${y}-${m}-${day}`}
@@ -16,7 +17,7 @@
   function colorFor(type){const types=state.config.tiposEvento||[];const i=Math.max(0,types.indexOf(type));return COLORS[i%COLORS.length]}
   function apiReady(){return /^https:\/\/script\.google\.com\/macros\/s\/.+\/exec/.test(cfg.API_URL||'')}
   async function apiGet(action='bootstrap'){
-    metrics.apiGetCalls++;
+    metrics.apiGetCalls++;syncMetrics();
     if(!apiReady())throw new Error('La aplicación está lista, pero aún falta conectar la URL publicada de Google Apps Script.');
     const res=await fetch(`${cfg.API_URL}?action=${encodeURIComponent(action)}&t=${Date.now()}`,{redirect:'follow',cache:'no-store'});
     if(!res.ok)throw new Error('No fue posible consultar el calendario.');
@@ -33,7 +34,7 @@
     $('#loading').hidden=false;$('#calendar').hidden=true;$('#agenda').hidden=true;$('#status').hidden=true;
     try{const data=await apiGet();state.events=data.events||[];state.specialDays=data.specialDays||[];state.config=data.config||{tiposEvento:[]};populateTypes();populateSpecialDayTypes();render()}
     catch(e){showStatus(e.message);render()}
-    finally{$('#loading').hidden=true;metrics.loadMs=Math.round(performance.now()-started)}
+    finally{$('#loading').hidden=true;metrics.loadMs=Math.round(performance.now()-started);syncMetrics()}
   }
   function showStatus(msg){const el=$('#status');el.textContent=msg;el.hidden=false}
   function populateTypes(){
@@ -55,7 +56,7 @@
   function isCommercializable(e){return ['si','sí'].includes(String(e?.Comercializable||'').trim().toLocaleLowerCase('es'))}
   function isHoliday(s){return normalizeType(s.Tipo)==='festivo'}
   function render(){
-    metrics.renderCalls++;
+    metrics.renderCalls++;syncMetrics();
     const data=viewData(),hasEvents=data.events.some(e=>{const start=parseDate(e.Fecha_Inicio),end=parseDate(e.Fecha_Fin||e.Fecha_Inicio);return start&&end&&start.getMonth()<=state.month&&end.getMonth()>=state.month}),hasSpecial=data.specialDays.some(s=>{const start=parseDate(s.Fecha_Inicio),end=parseDate(s.Fecha_Fin||s.Fecha_Inicio);return start&&end&&start.getMonth()<=state.month&&end.getMonth()>=state.month}),empty=!hasEvents&&!hasSpecial,mobile=matchMedia('(max-width:850px)').matches,showAgenda=mobile||state.view==='agenda';
     $('#monthTitle').textContent=`${MONTHS[state.month-8]} 2026`;if(showAgenda)renderAgenda(data);else renderCalendar(data);
     $('#emptyState').hidden=!empty;$('#calendar').hidden=showAgenda||empty;$('#agenda').hidden=!showAgenda||empty;
