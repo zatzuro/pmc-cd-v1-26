@@ -1,0 +1,5 @@
+window.PRISA_CALENDAR_CONFIG = {
+  API_URL: "",
+  PILOT_START: "2026-09-01",
+  PILOT_END: "2026-12-31"
+};
