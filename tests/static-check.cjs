@@ -24,5 +24,6 @@ assert(js.includes("if(!d.Sistema&&!$('#eventId').value)"),'Sistema debe ser obl
 assert(js.includes("if(!yes){$('#startTime').value='';$('#endTime').value=''}"),'Desactivar horas debe limpiar valores');
 assert(js.includes("if(!yes)$$('input[name=availability]').forEach(x=>x.checked=false)"),'Comercializable No debe limpiar disponibilidad');
 assert(css.includes('.form-modal fieldset[hidden]{display:none!important}'),'Los campos ocultos deben permanecer ocultos');
+assert(css.includes('.form-modal [hidden]{display:none!important}'),'Los grupos dinámicos ocultos deben permanecer ocultos');
 assert(css.includes('.calendar{display:block!important}.calendar[hidden]{display:none!important}'),'Móvil debe respetar la vista real');
 console.log('Frontend 1.2.0: estructura, modos, sincronización y regresiones estáticas OK');
