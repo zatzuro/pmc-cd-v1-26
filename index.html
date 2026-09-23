@@ -6,14 +6,14 @@
   <meta name="theme-color" content="#075ee8">
   <meta name="description" content="Calendario Directivo de PRISA Media Colombia">
   <title>Calendario Directivo | PRISA Media Colombia</title>
-  <link rel="stylesheet" href="styles.css?v=1.1.0">
+  <link rel="stylesheet" href="styles.css?v=1.2.0">
 </head>
 <body>
   <header class="topbar">
     <a class="brand" href="#" aria-label="Calendario Directivo Caracol Radio">
       <img class="brand-logo" src="caracol-radio.png" alt="Caracol Radio">
     </a>
-    <div class="product-name">Calendario Directivo</div>
+    <div class="product-name">Calendario Directivo <small id="editModeIndicator" hidden></small></div>
     <button class="button primary desktop-create" data-action="create"><span>＋</span> Crear evento</button>
   </header>
 
@@ -27,6 +27,11 @@
       <div class="search-wrap"><span aria-hidden="true">⌕</span><input id="search" type="search" placeholder="Nombre del evento"></div>
       <label class="field-label" for="filterType">Tipo</label>
       <select id="filterType"><option value="">Todos los tipos</option></select>
+      <label class="field-label" for="filterSystem">Sistema</label>
+      <select id="filterSystem"><option value="">Todos los sistemas</option></select>
+      <label class="field-label" for="filterTalent">Talento</label>
+      <input class="filter-input" id="filterTalent" list="talentFilterOptions" placeholder="Todos los talentos" autocomplete="off">
+      <datalist id="talentFilterOptions"></datalist>
       <label class="field-label" for="filterCommercial">Comercializable</label>
       <select id="filterCommercial"><option value="">Todos</option><option>Sí</option><option>No</option></select>
       <label class="field-label" for="filterAvailability">Disponibilidad</label>
@@ -74,10 +79,21 @@
         <input type="hidden" id="eventId">
         <label>Tipo de evento <b>*</b><select id="eventType" required><option value="">Selecciona un tipo</option></select></label>
         <label>Nombre del evento / acción <b>*</b><input id="eventName" required maxlength="160" placeholder="Ej. Lanzamiento nueva temporada"></label>
+        <label>Sistema <b>*</b><select id="eventSystem" required><option value="">Selecciona un sistema</option></select></label>
         <div class="form-grid">
           <label>Fecha de inicio <b>*</b><input id="startDate" type="date" min="2026-09-01" max="2026-12-31" required></label>
           <label>Fecha de fin <input id="endDate" type="date" min="2026-09-01" max="2026-12-31"><small>Déjala vacía si es de un solo día.</small></label>
         </div>
+        <fieldset><legend>¿Desea especificar horas?</legend><div class="choice-grid">
+          <label class="choice"><input type="radio" name="hasHours" value="No" checked><span>No</span></label>
+          <label class="choice"><input type="radio" name="hasHours" value="Sí"><span>Sí</span></label>
+        </div></fieldset>
+        <div class="form-grid" id="hoursGroup" hidden>
+          <label>Hora inicio <b>*</b><input id="startTime" type="time"></label>
+          <label>Hora fin <input id="endTime" type="time"></label>
+        </div>
+        <div class="multi-field"><label for="talentInput">Talentos</label><div class="multi-entry"><input id="talentInput" list="talentOptions" placeholder="Buscar talento" autocomplete="off"><button type="button" class="button secondary compact" data-action="add-talent">Agregar</button></div><datalist id="talentOptions"></datalist><div class="chips" id="talentChips"></div></div>
+        <div class="multi-field"><label for="executiveInput">Ejecutivos</label><div class="multi-entry"><input id="executiveInput" list="executiveOptions" placeholder="Buscar ejecutivo" autocomplete="off"><button type="button" class="button secondary compact" data-action="add-executive">Agregar</button></div><datalist id="executiveOptions"></datalist><div class="chips" id="executiveChips"></div></div>
         <fieldset><legend>Comercializable <b>*</b></legend><div class="choice-grid">
           <label class="choice"><input type="radio" name="commercial" value="Sí" required><span>Sí</span></label>
           <label class="choice"><input type="radio" name="commercial" value="No"><span>No</span></label>
@@ -110,6 +126,6 @@
 
   <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
   <script src="config.js"></script>
-  <script src="app.js?v=1.1.2"></script>
+  <script src="app.js?v=1.2.0"></script>
 </body>
 </html>
