@@ -9,15 +9,19 @@
 const SPREADSHEET_ID = '1JMhOlIAcrMntxnqzQ9LNoK-EoRVQNEC33BNT79zcRig';
 const TZ = 'America/Bogota';
 const VERSION_KEY = 'CALENDAR_DATA_VERSION';
+const MEGA_ACCESS_KEY = 'CALENDAR_MEGA_ACCESS_TOKEN';
 const CACHE = {
   CONFIG_KEY: 'calendar_config_v1',
-  CONFIG_SECONDS: 600
+  CONFIG_SECONDS: 600,
+  MEGA_BOOTSTRAP_PREFIX: 'calendar_mega_bootstrap_',
+  MEGA_BOOTSTRAP_SECONDS: 90
 };
 
 const SHEETS = {
   EVENTS: 'EVENTOS',
   SPECIAL_DAYS: 'DIAS_ESPECIALES',
-  CONFIG: 'CONFIGURACION'
+  CONFIG: 'CONFIGURACION',
+  HISTORY: 'HISTORIAL_CAMBIOS'
 };
 
 const EVENT_HEADERS = [
@@ -26,6 +30,8 @@ const EVENT_HEADERS = [
   'Comercializable', 'Disponibilidad', 'Descripcion', 'Enlace',
   'Fecha_Creacion', 'Fecha_Modificacion'
 ];
+const MEGA_EVENT_HEADERS = EVENT_HEADERS.concat(['Estado', 'Fecha_Cancelacion']);
+const HISTORY_HEADERS = ['ID', 'Evento_ID', 'Evento_Nombre', 'Accion', 'FechaHora', 'Cambios_JSON'];
 
 function doGet(e) {
   try {
@@ -41,6 +47,12 @@ function doGet(e) {
           version: getVersion_()
         });
       }
+      case 'megabootstrap':
+        assertMegaAccess_(e && e.parameter && e.parameter.access);
+        return ok_(getMegaBootstrap_());
+      case 'cancelled':
+        assertMegaAccess_(e && e.parameter && e.parameter.access);
+        return ok_({ events: getCancelledEvents_(), version: getVersion_() });
       case 'version':
         return ok_({ version: getVersion_() });
       case 'events':
@@ -75,6 +87,26 @@ function doPost(e) {
         break;
       case 'delete':
         result = { deletedId: deleteEvent_(body.id) };
+        break;
+      case 'megacreate':
+        assertMegaAccess_(body.access);
+        result = { event: megaCreateEvent_(body.event || body.data || {}) };
+        break;
+      case 'megaupdate':
+        assertMegaAccess_(body.access);
+        result = { event: megaUpdateEvent_(body.id || (body.event || {}).ID, body.event || body.data || {}) };
+        break;
+      case 'cancel':
+        assertMegaAccess_(body.access);
+        result = { event: cancelEvent_(body.id) };
+        break;
+      case 'restore':
+        assertMegaAccess_(body.access);
+        result = { event: restoreEvent_(body.id) };
+        break;
+      case 'purge':
+        assertMegaAccess_(body.access);
+        result = { deletedId: purgeCancelledEvent_(body.id) };
         break;
       default:
         throw new Error('Acción POST no válida.');
