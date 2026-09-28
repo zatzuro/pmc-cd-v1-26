@@ -5,10 +5,10 @@
   const DAYS=['Lunes','Martes','Miércoles','Jueves','Viernes','Sábado','Domingo'];
   const COLORS=['#2780e8','#13a05a','#9354d8','#ee8a22','#ee3f83','#e13f44','#385d8c','#13a0a2'];
   const params=new URLSearchParams(location.search),modeKey=(params.get('edit')||'').toLocaleLowerCase('es');
-  const MODES={prisa:{label:'PRISA Inspira',type:'PRISA Inspira'},caracol:{label:'Caracol',system:'Caracol'},musicales:{label:'Musicales',system:'Musicales'},full:{label:'Completa'}};
-  const mode=MODES[modeKey]||null;
+  const MODES={prisa:{label:'PRISA Inspira',type:'PRISA Inspira'},caracol:{label:'Caracol',system:'Caracol'},musicales:{label:'Musicales',system:'Musicales'},full:{label:'Completa'},mega:{label:'Administración MEGA'}};
+  const mode=MODES[modeKey]||null,megaMode=modeKey==='mega',megaAccess=params.get('access')||'';
   function initialMonth(now=new Date()){const start=new Date(2026,8,1),end=new Date(2026,11,31,23,59,59,999);if(now<start)return 8;if(now>end)return 11;return now.getMonth()}
-  const state={month:initialMonth(),events:[],specialDays:[],config:{},filters:{search:'',type:'',system:'',talent:'',commercial:'',availability:'',specialDays:'__holidays'},view:'month',selectedDay:null,selected:null,pendingDelete:null,lastVersion:null,formTalents:[],formExecutives:[],syncing:false};
+  const state={month:initialMonth(),events:[],specialDays:[],config:{},recentChanges:[],cancelledEvents:[],cancelledLoaded:false,megaTab:'changes',filters:{search:'',type:'',system:'',talent:'',commercial:'',availability:'',specialDays:'__holidays'},view:'month',selectedDay:null,selected:null,pendingDelete:null,pendingDeleteType:'delete',lastVersion:null,formTalents:[],formExecutives:[],syncing:false};
   const metrics={apiGetCalls:0,bootstrapCalls:0,versionCalls:0,renderCalls:0,loadMs:0};
   let toastTimer=null;
   const $=s=>document.querySelector(s),$$=s=>[...document.querySelectorAll(s)];
@@ -22,11 +22,11 @@
   function catalog(...names){for(const n of names){const v=state.config?.[n];if(Array.isArray(v))return v.filter(Boolean)}return[]}
   function colorFor(type){const i=Math.max(0,catalog('tiposEvento','Tipos_Evento').indexOf(type));return COLORS[i%COLORS.length]}
   function apiReady(){return /^https:\/\/script\.google\.com\/macros\/s\/.+\/exec/.test(cfg.API_URL||'')}
-  async function apiGet(action='bootstrap'){metrics.apiGetCalls++;metrics[action==='version'?'versionCalls':'bootstrapCalls']++;syncMetrics();if(!apiReady())throw new Error('Falta conectar la URL publicada de Google Apps Script.');const res=await fetch(`${cfg.API_URL}?action=${encodeURIComponent(action)}&t=${Date.now()}`,{redirect:'follow',cache:'no-store'});if(!res.ok)throw new Error('No fue posible consultar el calendario.');const json=await res.json();if(!json.ok)throw new Error(json.error||'La API devolvió un error.');return json.data}
+  async function apiGet(action='bootstrap'){metrics.apiGetCalls++;metrics[action==='version'?'versionCalls':'bootstrapCalls']++;syncMetrics();if(!apiReady())throw new Error('Falta conectar la URL publicada de Google Apps Script.');const needsMega=megaMode&&(action==='megabootstrap'||action==='cancelled'),access=needsMega?'&access='+encodeURIComponent(megaAccess):'';const res=await fetch(`${cfg.API_URL}?action=${encodeURIComponent(action)}&t=${Date.now()}${access}`,{redirect:'follow',cache:'no-store'});if(!res.ok)throw new Error('No fue posible consultar el calendario.');const json=await res.json();if(!json.ok)throw new Error(json.error||'La API devolvió un error.');return json.data}
   async function apiPost(payload){const res=await fetch(cfg.API_URL,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify(payload),redirect:'follow'});if(!res.ok)throw new Error('No fue posible guardar el cambio.');const json=await res.json();if(!json.ok)throw new Error(json.error||'La API devolvió un error.');return json.data}
   async function markOwnVersion(){try{const v=await apiGet('version');state.lastVersion=String(v.version??v)}catch(e){console.warn('Versión local pendiente:',e.message)}}
-  function applyBootstrap(data){state.events=data.events||[];state.specialDays=data.specialDays||[];state.config=data.config||{};if(data.version!=null)state.lastVersion=String(data.version);populateCatalogs();render()}
-  async function load(){const started=performance.now();$('#loading').hidden=false;$('#status').hidden=true;try{applyBootstrap(await apiGet('bootstrap'))}catch(e){showStatus(e.message);render()}finally{$('#loading').hidden=true;metrics.loadMs=Math.round(performance.now()-started);syncMetrics()}}
+  function applyBootstrap(data){state.events=data.events||[];state.specialDays=data.specialDays||[];state.config=data.config||{};if(megaMode&&Array.isArray(data.recentChanges))state.recentChanges=data.recentChanges;if(data.version!=null)state.lastVersion=String(data.version);populateCatalogs();render();if(megaMode)renderMegaChanges()}
+  async function load(){const started=performance.now();$('#loading').hidden=false;$('#status').hidden=true;try{applyBootstrap(await apiGet(megaMode?'megabootstrap':'bootstrap'))}catch(e){showStatus(e.message);render()}finally{$('#loading').hidden=true;metrics.loadMs=Math.round(performance.now()-started);syncMetrics()}}
   function showStatus(msg){const el=$('#status');el.textContent=msg;el.hidden=false}
   function fillSelect(selector,values,placeholder){const el=$(selector),current=el.value;el.innerHTML='';el.add(new Option(placeholder,''));values.forEach(v=>el.add(new Option(v,v)));el.value=values.includes(current)?current:''}
   function fillDatalist(selector,values){$(selector).innerHTML=values.map(v=>`<option value="${esc(v)}"></option>`).join('')}
