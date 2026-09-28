@@ -490,6 +490,15 @@ function ensureMegaColumns_(sheet) {
   }
 }
 
+function syncEventTypeValidation_(sheet) {
+  const maxRows = Math.max(sheet.getMaxRows(), 2);
+  const rule = SpreadsheetApp.newDataValidation()
+    .requireValueInRange(sheet_(SHEETS.CONFIG).getRange('A2:A100'), true)
+    .setAllowInvalid(false)
+    .build();
+  sheet.getRange(2, 2, maxRows - 1, 1).setDataValidation(rule);
+}
+
 function normalizeEventStatus_(value) {
   return clean_(value).toUpperCase() === 'CANCELADO' ? 'CANCELADO' : 'ACTIVO';
 }
@@ -595,6 +604,7 @@ function prepareMegaInfrastructure_() {
   const eventsSheet = ss.getSheetByName(SHEETS.EVENTS);
   if (!eventsSheet) throw new Error('No existe la hoja EVENTOS.');
   ensureMegaColumns_(eventsSheet);
+  syncEventTypeValidation_(eventsSheet);
   historySheet_();
 
   const props = PropertiesService.getScriptProperties();
