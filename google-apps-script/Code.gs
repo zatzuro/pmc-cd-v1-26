@@ -586,6 +586,10 @@ function setupMegaAccess_() {
   return token;
 }
 
+function prepareMegaInfrastructure() {
+  return prepareMegaInfrastructure_();
+}
+
 function prepareMegaInfrastructure_() {
   const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
   const eventsSheet = ss.getSheetByName(SHEETS.EVENTS);
