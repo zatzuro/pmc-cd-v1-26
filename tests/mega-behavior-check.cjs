@@ -52,9 +52,11 @@ function fixture() {
 {
  const f=fixture(), e={Tipo:'PRISA Inspira',Nombre:'QA FINAL MEGALINK',Sistema:'Caracol',Fecha_Inicio:'2026-09-28',Comercializable:'No'};
  const made=f.post('megacreate',null,'fixture-token',e);assert.equal(made.ok,true,JSON.stringify(made));
- const id=made.data.event.ID;assert.equal(f.rows.some(x=>x[0]===id),true);assert.equal(f.logs.at(-1)[3],'CREADO');
+ const id=made.data.event.ID;assert.equal(made.data.event.Estado,'ACTIVO');assert.equal(made.data.event.Fecha_Cancelacion,'');
+ assert.equal(f.rows.some(x=>x[0]===id),true);assert.equal(f.logs.at(-1)[3],'CREADO');
+ const createChanges=JSON.parse(f.logs.at(-1)[5]);assert.equal(createChanges.Tipo.despues,'PRISA Inspira');assert.equal(createChanges.Nombre.despues,'QA FINAL MEGALINK');assert.equal(createChanges.Fecha_Inicio.despues,'2026-09-28');
  const v=f.props.get('CALENDAR_DATA_VERSION');
- const same=f.post('megaupdate',id,'fixture-token',e);assert.equal(same.ok,true,JSON.stringify(same));assert.equal(f.props.get('CALENDAR_DATA_VERSION'),v);assert.equal(f.logs.at(-1)[3],'CREADO');
+ const same=f.post('megaupdate',id,'fixture-token',e);assert.equal(same.ok,true,JSON.stringify(same));assert.equal(same.data.event.Estado,'ACTIVO');assert.equal(same.data.event.Fecha_Cancelacion,'');assert.equal(f.props.get('CALENDAR_DATA_VERSION'),v);assert.equal(f.logs.at(-1)[3],'CREADO');
  const changed=f.post('update',id,'fixture-token',{...e,Nombre:'QA FINAL MEGALINK EDITADO'});assert.equal(changed.ok,true,JSON.stringify(changed));assert.equal(f.logs.at(-1)[3],'MODIFICADO');
 }
 {
