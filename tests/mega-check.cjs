@@ -14,6 +14,7 @@ assert.strictEqual(rootHtml,html,'root/index.html y dist/index.html deben perman
 assert.strictEqual(rootCss,css,'root/styles.css y dist/styles.css deben permanecer sincronizados');
 
 assert(app.includes("megaMode=modeKey==='mega'"),'Debe existir modo mega aislado');
+assert(app.includes("hashParams.get('access')||params.get('access')"),'El token MEGA debe admitir fragmento URL para no exponerse al servidor de GitHub Pages');
 assert(app.includes("megaMode?'megabootstrap':'bootstrap'"),'Los modos normales deben conservar bootstrap');
 assert(app.includes("action:'megacreate'"),'MEGA debe crear con acción separada');
 assert(app.includes("action:'megaupdate'"),'MEGA debe editar con acción separada');
