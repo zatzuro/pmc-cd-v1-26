@@ -9,3 +9,40 @@
 .form-modal [hidden]{display:none!important}
 @media(max-width:850px){.view-tabs{display:none}.calendar{display:block!important}.calendar[hidden]{display:none!important}.agenda{display:flex!important}.agenda[hidden]{display:none!important}.mobile-nav .mobile-create[hidden]{display:none}.product-name small{font-size:.6rem}.day-cell{min-height:92px;padding:5px}.weekday{padding:8px 2px;font-size:.65rem}.event-chip,.special-chip{font-size:.62rem;padding:4px}.calendar-section{overflow-x:hidden}}
 .form-modal fieldset[hidden]{display:none!important}
+
+
+/* MEGALINK: aislado de los modos existentes */
+html[data-mega='1'] .app-shell{grid-template-columns:260px minmax(0,1fr) 300px;max-width:1820px}
+.mega-panel{background:#fff;border-left:1px solid var(--line);padding:24px 18px;min-width:0}
+.mega-panel-header{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;margin-bottom:16px}
+.mega-panel-header small{display:block;color:var(--blue);font-size:.68rem;font-weight:800;letter-spacing:.08em}
+.mega-panel-header h2{margin:3px 0 0;font-size:1.15rem}
+.mega-close{display:none;position:static;font-size:1.6rem}
+.mega-tabs{display:grid;grid-template-columns:1fr 1fr;background:#eef2f8;padding:3px;border-radius:9px;margin-bottom:14px}
+.mega-tabs button{border:0;background:transparent;border-radius:7px;padding:8px 6px;font-size:.76rem}
+.mega-tabs button.active{background:#fff;box-shadow:0 2px 6px rgba(20,35,70,.12);font-weight:700}
+.mega-feed{display:flex;flex-direction:column;gap:8px}
+.mega-feed[hidden]{display:none!important}
+.mega-change{display:flex;flex-direction:column;gap:3px;width:100%;border:1px solid var(--line);background:#fff;border-radius:10px;padding:11px 12px;text-align:left}
+.mega-change:hover{border-color:#b8c8df;background:#f9fbfe}
+.mega-change.cancelled{border-left:3px solid var(--danger)}
+.mega-change strong{font-size:.84rem;line-height:1.3}
+.mega-change small{color:var(--muted);font-size:.72rem}
+.mega-action{color:var(--blue);font-size:.67rem;font-weight:800;text-transform:uppercase;letter-spacing:.03em}
+.mega-empty{padding:22px 10px;text-align:center;color:var(--muted);font-size:.8rem}
+.change-list{display:grid;gap:10px}
+.change-diff{border:1px solid var(--line);border-radius:10px;padding:12px}
+.change-diff>b{display:block;text-transform:capitalize;margin-bottom:8px;font-size:.82rem}
+.change-diff>span{display:grid;grid-template-columns:64px 1fr;gap:8px;font-size:.8rem;margin-top:5px}
+.change-diff i{font-style:normal;color:var(--muted);font-size:.72rem}
+@media(max-width:1120px) and (min-width:851px){
+  html[data-mega='1'] .app-shell{grid-template-columns:230px minmax(0,1fr) 260px}
+  html[data-mega='1'] .calendar-section{padding-left:18px;padding-right:18px}
+}
+@media(max-width:850px){
+  html[data-mega='1'] .app-shell{display:block}
+  .mega-panel{display:none;position:fixed;z-index:45;inset:65px 0 72px 0;border:0;padding:20px 16px;overflow:auto}
+  .mega-panel.open{display:block}
+  .mega-close{display:block}
+  html[data-mega='1'] .mobile-nav button{min-width:56px}
+}
