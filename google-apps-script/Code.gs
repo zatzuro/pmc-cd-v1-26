@@ -77,7 +77,7 @@ function doPost(e) {
         result = { deletedId: deleteEvent_(body.id) };
         break;
       default:
-        throw new Error('Acción POST no válida. Use create, update o delete.');
+        throw new Error('Acción POST no válida.');
     }
 
     result.version = touchVersion_();
@@ -257,6 +257,255 @@ function deleteEvent_(id) {
 
   sheet.deleteRow(offset + 2);
   return id;
+}
+
+
+function megaCreateEvent_(input) {
+  const created = createEvent_(input);
+  ensureMegaColumns_(sheet_(SHEETS.EVENTS));
+  recordChange_('CREADO', null, created, {});
+  return created;
+}
+
+function megaUpdateEvent_(id, input) {
+  const before = getMegaEventById_(id);
+  if (!before) throw new Error('Evento no encontrado.');
+  if (normalizeEventStatus_(before.Estado) === 'CANCELADO') {
+    throw new Error('Un evento cancelado debe recuperarse antes de editarlo.');
+  }
+  const updated = updateEvent_(id, input);
+  const after = Object.assign({}, updated, {
+    Estado: before.Estado || 'ACTIVO',
+    Fecha_Cancelacion: before.Fecha_Cancelacion || ''
+  });
+  const changes = diffEventFields_(before, after);
+  if (Object.keys(changes).length) recordChange_('MODIFICADO', before, after, changes);
+  return after;
+}
+
+function cancelEvent_(id) {
+  const located = findMegaEventRow_(id);
+  const current = normalizeOutputMegaEvent_(located.record);
+  if (normalizeEventStatus_(current.Estado) === 'CANCELADO') return current;
+
+  const now = new Date();
+  located.sheet.getRange(located.rowNumber, EVENT_HEADERS.length + 1, 1, 2)
+    .setValues([['CANCELADO', now]]);
+
+  const after = Object.assign({}, current, {
+    Estado: 'CANCELADO',
+    Fecha_Cancelacion: dateTimeOut_(now)
+  });
+  recordChange_('CANCELADO', current, after, {
+    Estado: { antes: normalizeEventStatus_(current.Estado), despues: 'CANCELADO' }
+  });
+  return after;
+}
+
+function restoreEvent_(id) {
+  const located = findMegaEventRow_(id);
+  const current = normalizeOutputMegaEvent_(located.record);
+  if (normalizeEventStatus_(current.Estado) !== 'CANCELADO') {
+    throw new Error('El evento no está cancelado.');
+  }
+
+  located.sheet.getRange(located.rowNumber, EVENT_HEADERS.length + 1, 1, 2)
+    .setValues([['ACTIVO', '']]);
+
+  const after = Object.assign({}, current, {
+    Estado: 'ACTIVO',
+    Fecha_Cancelacion: ''
+  });
+  recordChange_('RECUPERADO', current, after, {
+    Estado: { antes: 'CANCELADO', despues: 'ACTIVO' }
+  });
+  return after;
+}
+
+function purgeCancelledEvent_(id) {
+  const located = findMegaEventRow_(id);
+  const current = normalizeOutputMegaEvent_(located.record);
+  if (normalizeEventStatus_(current.Estado) !== 'CANCELADO') {
+    throw new Error('Solo se puede eliminar definitivamente un evento cancelado.');
+  }
+  located.sheet.deleteRow(located.rowNumber);
+  return clean_(id);
+}
+
+function getMegaBootstrap_() {
+  const version = getVersion_();
+  const cache = CacheService.getScriptCache();
+  const key = CACHE.MEGA_BOOTSTRAP_PREFIX + version;
+  const cached = cache.get(key);
+  if (cached) {
+    try { return JSON.parse(cached); } catch (_) {}
+  }
+
+  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  const data = {
+    events: getMegaEvents_(ss.getSheetByName(SHEETS.EVENTS)),
+    specialDays: getSpecialDays_(ss.getSheetByName(SHEETS.SPECIAL_DAYS)),
+    config: getConfig_(ss.getSheetByName(SHEETS.CONFIG)),
+    recentChanges: getRecentChanges_(10, ss),
+    version: version
+  };
+
+  try { cache.put(key, JSON.stringify(data), CACHE.MEGA_BOOTSTRAP_SECONDS); } catch (_) {}
+  return data;
+}
+
+function getMegaEvents_(sheet) {
+  sheet = sheet || sheet_(SHEETS.EVENTS);
+  ensureMegaColumns_(sheet);
+  const lastRow = sheet.getLastRow();
+  if (lastRow < 2) return [];
+  const rows = sheet.getRange(1, 1, lastRow, MEGA_EVENT_HEADERS.length).getValues();
+  const headers = rows[0].map(String);
+  return rows.slice(1)
+    .filter(row => String(row[0] || '').trim() !== '')
+    .map(row => normalizeOutputMegaEvent_(rowToObject_(headers, row)))
+    .filter(event => normalizeEventStatus_(event.Estado) !== 'CANCELADO');
+}
+
+function getCancelledEvents_(sheet) {
+  sheet = sheet || sheet_(SHEETS.EVENTS);
+  ensureMegaColumns_(sheet);
+  const lastRow = sheet.getLastRow();
+  if (lastRow < 2) return [];
+  const rows = sheet.getRange(1, 1, lastRow, MEGA_EVENT_HEADERS.length).getValues();
+  const headers = rows[0].map(String);
+  return rows.slice(1)
+    .filter(row => String(row[0] || '').trim() !== '')
+    .map(row => normalizeOutputMegaEvent_(rowToObject_(headers, row)))
+    .filter(event => normalizeEventStatus_(event.Estado) === 'CANCELADO')
+    .sort((a, b) => String(b.Fecha_Cancelacion || '').localeCompare(String(a.Fecha_Cancelacion || '')));
+}
+
+function getMegaEventById_(id) {
+  try {
+    return normalizeOutputMegaEvent_(findMegaEventRow_(id).record);
+  } catch (_) {
+    return null;
+  }
+}
+
+function findMegaEventRow_(id) {
+  id = clean_(id);
+  if (!id) throw new Error('Falta el ID del evento.');
+  const sheet = sheet_(SHEETS.EVENTS);
+  ensureMegaColumns_(sheet);
+  const lastRow = sheet.getLastRow();
+  if (lastRow < 2) throw new Error('Evento no encontrado.');
+  const values = sheet.getRange(1, 1, lastRow, MEGA_EVENT_HEADERS.length).getValues();
+  const headers = values[0].map(String);
+  const rowIndex = values.findIndex((row, i) => i > 0 && String(row[0]) === id);
+  if (rowIndex < 1) throw new Error('Evento no encontrado.');
+  return {
+    sheet: sheet,
+    rowNumber: rowIndex + 1,
+    record: rowToObject_(headers, values[rowIndex])
+  };
+}
+
+function ensureMegaColumns_(sheet) {
+  const start = EVENT_HEADERS.length + 1;
+  const current = sheet.getRange(1, start, 1, 2).getDisplayValues()[0];
+  if (!current[0] && !current[1]) {
+    sheet.getRange(1, start, 1, 2).setValues([['Estado', 'Fecha_Cancelacion']]);
+    return;
+  }
+  if (current[0] !== 'Estado' || current[1] !== 'Fecha_Cancelacion') {
+    throw new Error('Las columnas Q y R de EVENTOS están ocupadas y no coinciden con el esquema MEGA esperado.');
+  }
+}
+
+function normalizeEventStatus_(value) {
+  return clean_(value).toUpperCase() === 'CANCELADO' ? 'CANCELADO' : 'ACTIVO';
+}
+
+function normalizeOutputMegaEvent_(obj) {
+  const out = normalizeOutputEvent_(obj);
+  out.Estado = normalizeEventStatus_(obj.Estado);
+  out.Fecha_Cancelacion = dateTimeOut_(obj.Fecha_Cancelacion);
+  return out;
+}
+
+function diffEventFields_(before, after) {
+  const fields = [
+    'Tipo', 'Nombre', 'Sistema', 'Fecha_Inicio', 'Fecha_Fin',
+    'Hora_Inicio', 'Hora_Fin', 'Talentos', 'Ejecutivos',
+    'Comercializable', 'Disponibilidad', 'Descripcion', 'Enlace'
+  ];
+  const changes = {};
+  fields.forEach(field => {
+    const a = Array.isArray(before[field]) ? before[field].join(' | ') : clean_(before[field]);
+    const b = Array.isArray(after[field]) ? after[field].join(' | ') : clean_(after[field]);
+    if (a !== b) changes[field] = { antes: a, despues: b };
+  });
+  return changes;
+}
+
+function recordChange_(action, before, after, changes) {
+  const event = after || before || {};
+  const sheet = historySheet_();
+  sheet.appendRow([
+    Utilities.getUuid(),
+    clean_(event.ID),
+    clean_(event.Nombre),
+    clean_(action),
+    new Date(),
+    JSON.stringify(changes || {})
+  ]);
+}
+
+function historySheet_() {
+  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  let sheet = ss.getSheetByName(SHEETS.HISTORY);
+  if (!sheet) {
+    sheet = ss.insertSheet(SHEETS.HISTORY);
+    sheet.getRange(1, 1, 1, HISTORY_HEADERS.length).setValues([HISTORY_HEADERS]);
+    sheet.setFrozenRows(1);
+  } else {
+    const headers = sheet.getRange(1, 1, 1, HISTORY_HEADERS.length).getDisplayValues()[0];
+    if (HISTORY_HEADERS.some((h, i) => headers[i] !== h)) {
+      throw new Error('La hoja HISTORIAL_CAMBIOS no coincide con el esquema esperado.');
+    }
+  }
+  return sheet;
+}
+
+function getRecentChanges_(limit, ss) {
+  ss = ss || SpreadsheetApp.openById(SPREADSHEET_ID);
+  const sheet = ss.getSheetByName(SHEETS.HISTORY);
+  if (!sheet || sheet.getLastRow() < 2) return [];
+  const count = Math.min(Math.max(Number(limit) || 10, 1), 50);
+  const lastRow = sheet.getLastRow();
+  const startRow = Math.max(2, lastRow - count + 1);
+  const rows = sheet.getRange(startRow, 1, lastRow - startRow + 1, HISTORY_HEADERS.length).getValues();
+  return rows.reverse().map(row => {
+    let changes = {};
+    try { changes = row[5] ? JSON.parse(String(row[5])) : {}; } catch (_) {}
+    return {
+      ID: clean_(row[0]),
+      Evento_ID: clean_(row[1]),
+      Evento_Nombre: clean_(row[2]),
+      Accion: clean_(row[3]),
+      FechaHora: dateTimeOut_(row[4]),
+      Cambios: changes
+    };
+  });
+}
+
+function assertMegaAccess_(token) {
+  const expected = PropertiesService.getScriptProperties().getProperty(MEGA_ACCESS_KEY);
+  if (!expected) throw new Error('MEGALINK no configurado todavía.');
+  if (!token || String(token) !== expected) throw new Error('Acceso MEGA no válido.');
+}
+
+function setupMegaAccess_() {
+  const token = Utilities.getUuid().replace(/-/g, '') + Utilities.getUuid().replace(/-/g, '');
+  PropertiesService.getScriptProperties().setProperty(MEGA_ACCESS_KEY, token);
+  return token;
 }
 
 function validateEvent_(input, existing) {
