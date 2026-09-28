@@ -61,6 +61,19 @@
       <div id="agenda" class="agenda" hidden></div>
       <div id="emptyState" class="empty-state" hidden>No hay eventos que coincidan con los filtros.</div>
     </section>
+
+    <aside class="mega-panel" id="megaPanel" hidden>
+      <div class="mega-panel-header">
+        <div><small>MEGALINK</small><h2>Actividad</h2></div>
+        <button class="modal-close mega-close" data-action="close-mega" aria-label="Cerrar panel">×</button>
+      </div>
+      <div class="mega-tabs" role="tablist" aria-label="Herramientas MEGA">
+        <button class="active" data-mega-tab="changes" role="tab">Últimos cambios</button>
+        <button data-mega-tab="cancelled" role="tab">Cancelados</button>
+      </div>
+      <div id="megaChanges" class="mega-feed"></div>
+      <div id="megaCancelled" class="mega-feed" hidden></div>
+    </aside>
   </main>
 
   <nav class="mobile-nav" aria-label="Navegación móvil">
@@ -68,6 +81,7 @@
     <button data-mobile-view="agenda"><span>☷</span>Lista</button>
     <button class="mobile-create" data-action="create" aria-label="Crear evento"><span>＋</span>Crear</button>
     <button data-action="toggle-filters"><span>▽</span>Filtros</button>
+    <button class="mega-only" data-action="toggle-mega" hidden><span>◷</span>Actividad</button>
   </nav>
 
   <div class="modal-backdrop" id="formModal" hidden>
@@ -119,13 +133,13 @@
 
   <div class="modal-backdrop" id="confirmModal" hidden>
     <section class="modal confirm-modal" role="alertdialog" aria-modal="true" aria-labelledby="confirmTitle">
-      <div class="delete-icon">⌫</div><h2 id="confirmTitle">¿Eliminar este evento?</h2><p>Esta acción no se puede deshacer.</p>
-      <div class="form-actions"><button class="button secondary" data-action="cancel-delete">Cancelar</button><button class="button danger" data-action="confirm-delete">Eliminar</button></div>
+      <div class="delete-icon">⌫</div><h2 id="confirmTitle">¿Eliminar este evento?</h2><p id="confirmText">Esta acción no se puede deshacer.</p>
+      <div class="form-actions"><button class="button secondary" data-action="cancel-delete">Cancelar</button><button class="button danger" id="confirmDeleteButton" data-action="confirm-delete">Eliminar</button></div>
     </section>
   </div>
 
   <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
   <script src="config.js"></script>
-  <script src="app.js?v=1.2.1"></script>
+  <script src="app.js?v=1.3.0-mega1"></script>
 </body>
 </html>
