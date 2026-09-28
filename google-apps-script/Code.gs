@@ -76,67 +76,165 @@ function doGet(e) {
 
 function doPost(e) {
   const lock = LockService.getScriptLock();
-
+  let checkpoint = null;
   try {
     lock.waitLock(10000);
     const body = parseBody_(e);
     const action = String(body.action || '').toLowerCase();
-    let result;
-
+    const mega = ['megacreate', 'megaupdate', 'cancel', 'restore', 'purge'].includes(action);
+    if (mega) assertMegaAccess_(body.access);
+    if (!['create', 'update', 'delete', 'megacreate', 'megaupdate', 'cancel', 'restore', 'purge'].includes(action)) {
+      throw new Error('Acción POST no válida.');
+    }
+    const creating = action === 'create' || action === 'megacreate';
+    const purging = action === 'purge';
+    const id = body.id || (body.event || {}).ID;
+    // Check schema and history before modifying a row. A:P remains unchanged.
+    const sheet = sheet_(SHEETS.EVENTS);
+    ensureMegaColumns_(sheet);
+    const history = purging ? null : historySheet_();
+    let located = creating ? null : findMegaEventRow_(id);
+    const before = located ? normalizeOutputMegaEvent_(located.record) : null;
+    const currentStatus = before && normalizeEventStatus_(before.Estado);
+    if ((action === 'update' || action === 'megaupdate') && currentStatus === 'CANCELADO') {
+      throw new Error('Un evento cancelado debe recuperarse antes de editarlo.');
+    }
+    if (purging && currentStatus !== 'CANCELADO') throw new Error('Solo se puede eliminar definitivamente un evento cancelado.');
+    if (action === 'restore' && currentStatus !== 'CANCELADO') throw new Error('El evento no está cancelado.');
+    if (action === 'delete' || action === 'cancel') {
+      if (currentStatus === 'CANCELADO') return ok_({ event: before, deletedId: clean_(id), version: getVersion_() });
+    }
+    if (action === 'update' || action === 'megaupdate' || creating) {
+      // All catalog/date validations run before any EVENTOS write.
+      validateEvent_(body.event || body.data || {}, creating ? null : located.record);
+    }
+    const oldRowCount = sheet.getLastRow();
+    const oldRow = located ? sheet.getRange(located.rowNumber, 1, 1, MEGA_EVENT_HEADERS.length).getValues()[0] : null;
+    const oldHistoryCount = history ? history.getLastRow() : 0;
+    const oldFirstHistory = history && oldHistoryCount > HISTORY_MAX_ROWS ?
+      history.getRange(2, 1, 1, HISTORY_HEADERS.length).getValues()[0] : null;
+    checkpoint = { sheet, history, oldRowCount, oldRow, rowNumber: located && located.rowNumber,
+      oldHistoryCount, oldFirstHistory, creating, purging, changed: false };
+    let result, after, changes = {}, historyAction = '';
     switch (action) {
       case 'create':
-        result = { event: createEvent_(body.event || body.data || {}) };
+      case 'megacreate': {
+        const created = createEvent_(body.event || body.data || {});
+        after = action === 'megacreate'
+          ? Object.assign({}, created, { Estado: 'ACTIVO', Fecha_Cancelacion: '' })
+          : created;
+        checkpoint.changed = true;
+        result = { event: after };
+        historyAction = 'CREADO';
+        changes = {
+          Tipo: { antes: '', despues: clean_(after.Tipo) },
+          Nombre: { antes: '', despues: clean_(after.Nombre) },
+          Fecha_Inicio: { antes: '', despues: clean_(after.Fecha_Inicio) }
+        };
         break;
+      }
       case 'update':
-        result = { event: updateEvent_(body.id || (body.event || {}).ID, body.event || body.data || {}) };
+      case 'megaupdate': {
+        const updated = updateEvent_(id, body.event || body.data || {});
+        after = action === 'megaupdate'
+          ? Object.assign({}, updated, {
+              Estado: before.Estado || 'ACTIVO',
+              Fecha_Cancelacion: before.Fecha_Cancelacion || ''
+            })
+          : updated;
+        changes = diffEventFields_(before, after);
+        checkpoint.changed = Object.keys(changes).length > 0;
+        result = { event: after };
+        historyAction = 'MODIFICADO';
         break;
+      }
       case 'delete':
-        result = { deletedId: deleteEvent_(body.id) };
-        break;
-      case 'megacreate':
-        assertMegaAccess_(body.access);
-        result = { event: megaCreateEvent_(body.event || body.data || {}) };
-        break;
-      case 'megaupdate':
-        assertMegaAccess_(body.access);
-        result = { event: megaUpdateEvent_(body.id || (body.event || {}).ID, body.event || body.data || {}) };
-        break;
       case 'cancel':
-        assertMegaAccess_(body.access);
-        result = { event: cancelEvent_(body.id) };
+        after = cancelEventRow_(located, before);
+        checkpoint.changed = true;
+        result = { event: after, deletedId: clean_(id) };
+        historyAction = 'CANCELADO';
+        changes = { Estado: { antes: 'ACTIVO', despues: 'CANCELADO' } };
         break;
       case 'restore':
-        assertMegaAccess_(body.access);
-        result = { event: restoreEvent_(body.id) };
+        after = restoreEventRow_(located, before);
+        checkpoint.changed = true;
+        result = { event: after };
+        historyAction = 'RECUPERADO';
+        changes = { Estado: { antes: 'CANCELADO', despues: 'ACTIVO' } };
         break;
       case 'purge':
-        assertMegaAccess_(body.access);
-        result = { deletedId: purgeCancelledEvent_(body.id) };
+        sheet.deleteRow(located.rowNumber);
+        checkpoint.changed = true;
+        result = { deletedId: clean_(id) };
         break;
-      default:
-        throw new Error('Acción POST no válida.');
     }
-
-    result.version = touchVersion_();
+    if (checkpoint.changed && historyAction) recordChange_(historyAction, before, after, changes, history);
+    result.version = checkpoint.changed ? touchVersion_() : getVersion_();
+    checkpoint = null;
     return ok_(result);
   } catch (err) {
+    if (checkpoint) {
+      try { rollbackMutation_(checkpoint); }
+      catch (rollbackError) {
+        console.error('Rollback falló:', rollbackError);
+        return fail_(new Error('Cambio parcialmente aplicado; verificar la Sheet antes de reintentar. ' + err.message));
+      }
+    }
     return fail_(err);
   } finally {
     try { lock.releaseLock(); } catch (_) {}
   }
 }
 
+function rollbackMutation_(c) {
+  if (c.creating && c.sheet.getLastRow() > c.oldRowCount) {
+    c.sheet.deleteRow(c.oldRowCount + 1);
+  } else if (c.purging && c.sheet.getLastRow() < c.oldRowCount) {
+    c.sheet.insertRowBefore(c.rowNumber);
+    c.sheet.getRange(c.rowNumber, 1, 1, MEGA_EVENT_HEADERS.length).setValues([c.oldRow]);
+  } else if (c.oldRow && c.sheet.getLastRow() >= c.rowNumber) {
+    c.sheet.getRange(c.rowNumber, 1, 1, MEGA_EVENT_HEADERS.length).setValues([c.oldRow]);
+  }
+  if (c.history) {
+    const count = c.history.getLastRow();
+    if (count > c.oldHistoryCount) c.history.deleteRows(c.oldHistoryCount + 1, count - c.oldHistoryCount);
+    if (c.oldFirstHistory && c.history.getLastRow() === c.oldHistoryCount &&
+        c.history.getRange(2, 1).getValue() !== c.oldFirstHistory[0]) {
+      c.history.deleteRow(c.history.getLastRow());
+    }
+    if (c.oldFirstHistory && c.history.getLastRow() < c.oldHistoryCount) {
+      c.history.insertRowBefore(2);
+      c.history.getRange(2, 1, 1, HISTORY_HEADERS.length).setValues([c.oldFirstHistory]);
+    }
+  }
+}
+
+function cancelEventRow_(located, before) {
+  const now = new Date();
+  located.sheet.getRange(located.rowNumber, EVENT_HEADERS.length + 1, 1, 2).setValues([['CANCELADO', now]]);
+  return Object.assign({}, before, { Estado: 'CANCELADO', Fecha_Cancelacion: dateTimeOut_(now) });
+}
+
+function restoreEventRow_(located, before) {
+  located.sheet.getRange(located.rowNumber, EVENT_HEADERS.length + 1, 1, 2).setValues([['ACTIVO', '']]);
+  return Object.assign({}, before, { Estado: 'ACTIVO', Fecha_Cancelacion: '' });
+}
+
 function getEvents_(sheet) {
   sheet = sheet || sheet_(SHEETS.EVENTS);
   const lastRow = sheet.getLastRow();
   if (lastRow < 2) return [];
-  const rows = sheet.getRange(1, 1, lastRow, EVENT_HEADERS.length).getValues();
+  const hasStatus = sheet.getMaxColumns() > EVENT_HEADERS.length &&
+    sheet.getRange(1, EVENT_HEADERS.length + 1).getDisplayValue() === 'Estado';
+  const rows = sheet.getRange(1, 1, lastRow, hasStatus ? EVENT_HEADERS.length + 1 : EVENT_HEADERS.length).getValues();
 
   const headers = rows[0].map(String);
 
   return rows.slice(1)
-    .filter(row => String(row[0] || '').trim() !== '')
-    .map(row => rowToObject_(headers, row))
+    .filter(row => String(row[0] || '').trim() !== '' &&
+      (!hasStatus || normalizeEventStatus_(row[EVENT_HEADERS.length]) !== 'CANCELADO'))
+    .map(row => rowToObject_(headers.slice(0, EVENT_HEADERS.length), row.slice(0, EVENT_HEADERS.length)))
     .map(normalizeOutputEvent_);
 }
 
@@ -252,6 +350,10 @@ function updateEvent_(id, input) {
   if (rowIndex < 1) throw new Error('Evento no encontrado.');
 
   const existing = rowToObject_(headers, values[rowIndex]);
+  const status = sheet.getRange(rowIndex + 1, EVENT_HEADERS.length + 1).getValue();
+  if (normalizeEventStatus_(status) === 'CANCELADO') {
+    throw new Error('Un evento cancelado debe recuperarse antes de editarlo.');
+  }
   const merged = Object.assign({}, existing, input, { ID: id });
   const data = validateEvent_(merged, existing);
 
@@ -274,6 +376,10 @@ function updateEvent_(id, input) {
     Fecha_Modificacion: new Date()
   };
 
+  if (!Object.keys(diffEventFields_(normalizeOutputEvent_(existing), normalizeOutputEvent_(record))).length) {
+    return normalizeOutputEvent_(existing);
+  }
+
   sheet.getRange(rowIndex + 1, 1, 1, EVENT_HEADERS.length)
     .setValues([EVENT_HEADERS.map(h => record[h])]);
 
@@ -281,19 +387,7 @@ function updateEvent_(id, input) {
 }
 
 function deleteEvent_(id) {
-  id = clean_(id);
-  if (!id) throw new Error('Falta el ID del evento.');
-
-  const sheet = sheet_(SHEETS.EVENTS);
-  const lastRow = sheet.getLastRow();
-  if (lastRow < 2) throw new Error('Evento no encontrado.');
-
-  const ids = sheet.getRange(2, 1, lastRow - 1, 1).getDisplayValues();
-  const offset = ids.findIndex(row => row[0] === id);
-  if (offset < 0) throw new Error('Evento no encontrado.');
-
-  sheet.deleteRow(offset + 2);
-  return id;
+  return cancelEvent_(id).ID;
 }
 
 
@@ -302,11 +396,7 @@ function megaCreateEvent_(input) {
   ensureMegaColumns_(sheet);
   const history = historySheet_();
   const created = createEvent_(input);
-  recordChange_('CREADO', null, created, {
-    Tipo: { antes: '', despues: clean_(created.Tipo) },
-    Nombre: { antes: '', despues: clean_(created.Nombre) },
-    Fecha_Inicio: { antes: '', despues: clean_(created.Fecha_Inicio) }
-  }, history);
+
   return Object.assign({}, created, { Estado: 'ACTIVO', Fecha_Cancelacion: '' });
 }
 
@@ -323,7 +413,7 @@ function megaUpdateEvent_(id, input) {
     Fecha_Cancelacion: before.Fecha_Cancelacion || ''
   });
   const changes = diffEventFields_(before, after);
-  if (Object.keys(changes).length) recordChange_('MODIFICADO', before, after, changes, history);
+
   return after;
 }
 
@@ -341,9 +431,7 @@ function cancelEvent_(id) {
     Estado: 'CANCELADO',
     Fecha_Cancelacion: dateTimeOut_(now)
   });
-  recordChange_('CANCELADO', current, after, {
-    Estado: { antes: normalizeEventStatus_(current.Estado), despues: 'CANCELADO' }
-  }, history);
+
   return after;
 }
 
@@ -362,9 +450,7 @@ function restoreEvent_(id) {
     Estado: 'ACTIVO',
     Fecha_Cancelacion: ''
   });
-  recordChange_('RECUPERADO', current, after, {
-    Estado: { antes: 'CANCELADO', despues: 'ACTIVO' }
-  }, history);
+
   return after;
 }
 
@@ -758,8 +844,9 @@ function getVersion_() {
 }
 
 function touchVersion_() {
-  const version = String(Date.now());
-  PropertiesService.getScriptProperties().setProperty(VERSION_KEY, version);
+  const props = PropertiesService.getScriptProperties();
+  const version = String(Math.max(Date.now(), Number(props.getProperty(VERSION_KEY) || 0) + 1));
+  props.setProperty(VERSION_KEY, version);
   return version;
 }
 
