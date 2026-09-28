@@ -6,7 +6,8 @@
   const COLORS=['#2780e8','#13a05a','#9354d8','#ee8a22','#ee3f83','#e13f44','#385d8c','#13a0a2'];
   const params=new URLSearchParams(location.search),modeKey=(params.get('edit')||'').toLocaleLowerCase('es');
   const MODES={prisa:{label:'PRISA Inspira',type:'PRISA Inspira'},caracol:{label:'Caracol',system:'Caracol'},musicales:{label:'Musicales',system:'Musicales'},full:{label:'Completa'},mega:{label:'Administración MEGA'}};
-  const mode=MODES[modeKey]||null,megaMode=modeKey==='mega',megaAccess=params.get('access')||'';
+  const hashParams=new URLSearchParams(String(location.hash||'').replace(/^#/,''));
+  const mode=MODES[modeKey]||null,megaMode=modeKey==='mega',megaAccess=hashParams.get('access')||params.get('access')||'';
   function initialMonth(now=new Date()){const start=new Date(2026,8,1),end=new Date(2026,11,31,23,59,59,999);if(now<start)return 8;if(now>end)return 11;return now.getMonth()}
   const state={month:initialMonth(),events:[],specialDays:[],config:{},recentChanges:[],cancelledEvents:[],cancelledLoaded:false,megaTab:'changes',filters:{search:'',type:'',system:'',talent:'',commercial:'',availability:'',specialDays:'__holidays'},view:'month',selectedDay:null,selected:null,pendingDelete:null,pendingDeleteType:'delete',lastVersion:null,formTalents:[],formExecutives:[],syncing:false};
   const metrics={apiGetCalls:0,bootstrapCalls:0,versionCalls:0,renderCalls:0,loadMs:0};
