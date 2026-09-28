@@ -1,0 +1,98 @@
+name: Deploy Apps Script
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - "google-apps-script/**"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: apps-script-production
+  cancel-in-progress: false
+
+jobs:
+  validate-and-deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      CLASPRC_JSON: ${{ secrets.CLASPRC_JSON }}
+      CLASP_JSON: ${{ secrets.CLASP_JSON }}
+      APPS_SCRIPT_DEPLOYMENT_ID: ${{ secrets.APPS_SCRIPT_DEPLOYMENT_ID }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Validate repository
+        run: node --test tests/*.cjs
+
+      - name: Check Apps Script CI/CD configuration
+        id: config
+        shell: bash
+        run: |
+          missing=0
+          for var_name in CLASPRC_JSON CLASP_JSON APPS_SCRIPT_DEPLOYMENT_ID; do
+            if [ -z "${!var_name}" ]; then
+              echo "::notice::${var_name} is not configured; Apps Script deployment is skipped."
+              missing=1
+            fi
+          done
+
+          if [ "$missing" -eq 0 ]; then
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Install clasp
+        if: steps.config.outputs.ready == 'true'
+        run: npm install --global @google/clasp@3
+
+      - name: Configure clasp credentials
+        if: steps.config.outputs.ready == 'true'
+        shell: bash
+        run: |
+          printf '%s' "$CLASPRC_JSON" > "$HOME/.clasprc.json"
+          printf '%s' "$CLASP_JSON" > ".clasp.json"
+          chmod 600 "$HOME/.clasprc.json" ".clasp.json"
+
+      - name: Verify authorized account and target deployment
+        if: steps.config.outputs.ready == 'true'
+        shell: bash
+        run: |
+          clasp show-authorized-user --json
+          deployments="$(clasp list-deployments)"
+          printf '%s\n' "$deployments"
+
+          if ! printf '%s\n' "$deployments" | grep -Fq "$APPS_SCRIPT_DEPLOYMENT_ID"; then
+            echo "::error::Configured deployment ID does not exist in this Apps Script project. Refusing to create a new deployment."
+            exit 1
+          fi
+
+      - name: Show files that will be synchronized
+        if: steps.config.outputs.ready == 'true'
+        run: clasp show-file-status --json
+
+      - name: Push repository source to Apps Script
+        if: steps.config.outputs.ready == 'true'
+        run: clasp push --force
+
+      - name: Update existing production deployment
+        if: steps.config.outputs.ready == 'true'
+        shell: bash
+        run: |
+          clasp create-deployment             --deploymentId "$APPS_SCRIPT_DEPLOYMENT_ID"             --description "GitHub ${GITHUB_SHA::7}"
+
+      - name: Confirm deployment
+        if: steps.config.outputs.ready == 'true'
+        run: clasp list-deployments
