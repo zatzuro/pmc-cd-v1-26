@@ -753,7 +753,7 @@ function touchVersion_() {
  * Instala una sola vez el trigger de edición sobre la hoja. Es necesario
  * porque este proyecto de Apps Script es independiente, no vinculado a la Sheet.
  */
-function installSpreadsheetEditTrigger_() {
+function installSpreadsheetEditTrigger() {
   ScriptApp.getProjectTriggers()
     .filter(trigger => trigger.getHandlerFunction() === 'handleSpreadsheetEdit_')
     .forEach(trigger => ScriptApp.deleteTrigger(trigger));
