@@ -440,6 +440,10 @@ function findMegaEventRow_(id) {
 }
 
 function ensureMegaColumns_(sheet) {
+  const required = MEGA_EVENT_HEADERS.length;
+  const missing = required - sheet.getMaxColumns();
+  if (missing > 0) sheet.insertColumnsAfter(sheet.getMaxColumns(), missing);
+
   const start = EVENT_HEADERS.length + 1;
   const current = sheet.getRange(1, start, 1, 2).getDisplayValues()[0];
   if (!current[0] && !current[1]) {
