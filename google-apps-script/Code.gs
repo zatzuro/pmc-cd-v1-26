@@ -10,6 +10,8 @@ const SPREADSHEET_ID = '1JMhOlIAcrMntxnqzQ9LNoK-EoRVQNEC33BNT79zcRig';
 const TZ = 'America/Bogota';
 const VERSION_KEY = 'CALENDAR_DATA_VERSION';
 const MEGA_ACCESS_KEY = 'CALENDAR_MEGA_ACCESS_TOKEN';
+const API_VERSION = '1.3.0-mega1';
+const HISTORY_MAX_ROWS = 500;
 const CACHE = {
   CONFIG_KEY: 'calendar_config_v1',
   CONFIG_SECONDS: 600,
@@ -53,6 +55,9 @@ function doGet(e) {
       case 'cancelled':
         assertMegaAccess_(e && e.parameter && e.parameter.access);
         return ok_({ events: getCancelledEvents_(), version: getVersion_() });
+      case 'megahealth':
+        assertMegaAccess_(e && e.parameter && e.parameter.access);
+        return ok_(getMegaHealth_());
       case 'version':
         return ok_({ version: getVersion_() });
       case 'events':
@@ -293,10 +298,15 @@ function deleteEvent_(id) {
 
 
 function megaCreateEvent_(input) {
+  const sheet = sheet_(SHEETS.EVENTS);
+  ensureMegaColumns_(sheet);
   const created = createEvent_(input);
-  ensureMegaColumns_(sheet_(SHEETS.EVENTS));
-  recordChange_('CREADO', null, created, {});
-  return created;
+  recordChange_('CREADO', null, created, {
+    Tipo: { antes: '', despues: clean_(created.Tipo) },
+    Nombre: { antes: '', despues: clean_(created.Nombre) },
+    Fecha_Inicio: { antes: '', despues: clean_(created.Fecha_Inicio) }
+  });
+  return Object.assign({}, created, { Estado: 'ACTIVO', Fecha_Cancelacion: '' });
 }
 
 function megaUpdateEvent_(id, input) {
@@ -362,6 +372,27 @@ function purgeCancelledEvent_(id) {
   }
   located.sheet.deleteRow(located.rowNumber);
   return clean_(id);
+}
+
+function getMegaHealth_() {
+  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  const eventsSheet = ss.getSheetByName(SHEETS.EVENTS);
+  const historySheet = ss.getSheetByName(SHEETS.HISTORY);
+  const currentHeaders = eventsSheet
+    ? eventsSheet.getRange(1, 1, 1, Math.min(eventsSheet.getMaxColumns(), MEGA_EVENT_HEADERS.length)).getDisplayValues()[0]
+    : [];
+
+  return {
+    apiVersion: API_VERSION,
+    version: getVersion_(),
+    spreadsheet: {
+      eventsExists: !!eventsSheet,
+      eventsColumns: eventsSheet ? eventsSheet.getMaxColumns() : 0,
+      megaSchemaReady: !!eventsSheet && MEGA_EVENT_HEADERS.every((h, i) => currentHeaders[i] === h),
+      historyExists: !!historySheet,
+      historyRows: historySheet ? Math.max(historySheet.getLastRow() - 1, 0) : 0
+    }
+  };
 }
 
 function getMegaBootstrap_() {
@@ -492,6 +523,13 @@ function recordChange_(action, before, after, changes) {
     new Date(),
     JSON.stringify(changes || {})
   ]);
+  trimHistory_(sheet);
+}
+
+function trimHistory_(sheet) {
+  const dataRows = Math.max(sheet.getLastRow() - 1, 0);
+  const excess = dataRows - HISTORY_MAX_ROWS;
+  if (excess > 0) sheet.deleteRows(2, excess);
 }
 
 function historySheet_() {
@@ -542,6 +580,32 @@ function setupMegaAccess_() {
   const token = Utilities.getUuid().replace(/-/g, '') + Utilities.getUuid().replace(/-/g, '');
   PropertiesService.getScriptProperties().setProperty(MEGA_ACCESS_KEY, token);
   return token;
+}
+
+function prepareMegaInfrastructure_() {
+  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  const eventsSheet = ss.getSheetByName(SHEETS.EVENTS);
+  if (!eventsSheet) throw new Error('No existe la hoja EVENTOS.');
+  ensureMegaColumns_(eventsSheet);
+  historySheet_();
+
+  const props = PropertiesService.getScriptProperties();
+  let token = props.getProperty(MEGA_ACCESS_KEY);
+  let tokenCreated = false;
+  if (!token) {
+    token = setupMegaAccess_();
+    tokenCreated = true;
+  }
+
+  touchVersion_();
+  return {
+    ok: true,
+    apiVersion: API_VERSION,
+    token: token,
+    tokenCreated: tokenCreated,
+    eventColumns: eventsSheet.getMaxColumns(),
+    historySheet: SHEETS.HISTORY
+  };
 }
 
 function validateEvent_(input, existing) {
