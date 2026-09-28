@@ -35,6 +35,10 @@ assert(gas.includes("function cancelEvent_"),'Backend debe cancelar sin borrar')
 assert(gas.includes("function restoreEvent_"),'Backend debe recuperar');
 assert(gas.includes("function purgeCancelledEvent_"),'Backend debe borrar definitivamente solo cancelados');
 assert(gas.includes("function setupMegaAccess_"),'Debe existir inicialización segura del token');
+assert(gas.includes("function prepareMegaInfrastructure_"),'Debe existir preparación única de infraestructura MEGA');
+assert(gas.includes("case 'megahealth'"),'Debe existir diagnóstico MEGA protegido');
+assert(gas.includes("const HISTORY_MAX_ROWS = 500"),'Historial debe tener retención limitada');
+assert(gas.includes("function trimHistory_"),'Historial debe podarse automáticamente');
 assert(gas.includes('sheet.insertColumnsAfter(sheet.getMaxColumns(), missing)'),'MEGA debe ampliar EVENTOS de 16 a 18 columnas de forma segura');
 
 assert(gas.includes("case 'bootstrap'"),'Bootstrap normal debe mantenerse');
