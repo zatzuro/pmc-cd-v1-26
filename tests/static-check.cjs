@@ -12,7 +12,7 @@ assert(js.includes("specialDays:'__holidays'"),'Solo festivos debe ser inicial')
 assert(js.includes("s==='__all'"),'Debe existir Todas para fechas especiales');
 assert(js.includes("norm(x.Tipo)==='festivo'"),'Festivo debe filtrarse exactamente');
 assert(js.includes('eventRanges:indexByRange(events)'),'Los eventos multidía deben indexarse por rango');
-assert(js.includes("apiGet('bootstrap')"),'Debe usarse bootstrap');
+assert(js.includes("apiGet('bootstrap')")||js.includes("megaMode?'megabootstrap':'bootstrap'"),'Debe usarse bootstrap normal y MEGA de forma compatible');
 assert(js.includes("apiGet('version')"),'Debe usarse el endpoint ligero de versión');
 assert(js.includes('setInterval(checkVersion,60000)'),'La versión debe comprobarse cada 60 segundos');
 assert(js.includes("window.addEventListener('focus',checkVersion)"),'Debe sincronizar al recuperar foco');
