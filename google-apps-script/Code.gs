@@ -300,16 +300,18 @@ function deleteEvent_(id) {
 function megaCreateEvent_(input) {
   const sheet = sheet_(SHEETS.EVENTS);
   ensureMegaColumns_(sheet);
+  const history = historySheet_();
   const created = createEvent_(input);
   recordChange_('CREADO', null, created, {
     Tipo: { antes: '', despues: clean_(created.Tipo) },
     Nombre: { antes: '', despues: clean_(created.Nombre) },
     Fecha_Inicio: { antes: '', despues: clean_(created.Fecha_Inicio) }
-  });
+  }, history);
   return Object.assign({}, created, { Estado: 'ACTIVO', Fecha_Cancelacion: '' });
 }
 
 function megaUpdateEvent_(id, input) {
+  const history = historySheet_();
   const before = getMegaEventById_(id);
   if (!before) throw new Error('Evento no encontrado.');
   if (normalizeEventStatus_(before.Estado) === 'CANCELADO') {
@@ -321,11 +323,12 @@ function megaUpdateEvent_(id, input) {
     Fecha_Cancelacion: before.Fecha_Cancelacion || ''
   });
   const changes = diffEventFields_(before, after);
-  if (Object.keys(changes).length) recordChange_('MODIFICADO', before, after, changes);
+  if (Object.keys(changes).length) recordChange_('MODIFICADO', before, after, changes, history);
   return after;
 }
 
 function cancelEvent_(id) {
+  const history = historySheet_();
   const located = findMegaEventRow_(id);
   const current = normalizeOutputMegaEvent_(located.record);
   if (normalizeEventStatus_(current.Estado) === 'CANCELADO') return current;
@@ -340,11 +343,12 @@ function cancelEvent_(id) {
   });
   recordChange_('CANCELADO', current, after, {
     Estado: { antes: normalizeEventStatus_(current.Estado), despues: 'CANCELADO' }
-  });
+  }, history);
   return after;
 }
 
 function restoreEvent_(id) {
+  const history = historySheet_();
   const located = findMegaEventRow_(id);
   const current = normalizeOutputMegaEvent_(located.record);
   if (normalizeEventStatus_(current.Estado) !== 'CANCELADO') {
@@ -360,7 +364,7 @@ function restoreEvent_(id) {
   });
   recordChange_('RECUPERADO', current, after, {
     Estado: { antes: 'CANCELADO', despues: 'ACTIVO' }
-  });
+  }, history);
   return after;
 }
 
@@ -512,9 +516,9 @@ function diffEventFields_(before, after) {
   return changes;
 }
 
-function recordChange_(action, before, after, changes) {
+function recordChange_(action, before, after, changes, sheet) {
   const event = after || before || {};
-  const sheet = historySheet_();
+  sheet = sheet || historySheet_();
   sheet.appendRow([
     Utilities.getUuid(),
     clean_(event.ID),
