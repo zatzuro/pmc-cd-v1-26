@@ -118,21 +118,36 @@ function doPost(e) {
     let result, after, changes = {}, historyAction = '';
     switch (action) {
       case 'create':
-      case 'megacreate':
-        after = createEvent_(body.event || body.data || {});
+      case 'megacreate': {
+        const created = createEvent_(body.event || body.data || {});
+        after = action === 'megacreate'
+          ? Object.assign({}, created, { Estado: 'ACTIVO', Fecha_Cancelacion: '' })
+          : created;
         checkpoint.changed = true;
         result = { event: after };
         historyAction = 'CREADO';
-        changes = { Nombre: { antes: '', despues: after.Nombre } };
+        changes = {
+          Tipo: { antes: '', despues: clean_(after.Tipo) },
+          Nombre: { antes: '', despues: clean_(after.Nombre) },
+          Fecha_Inicio: { antes: '', despues: clean_(after.Fecha_Inicio) }
+        };
         break;
+      }
       case 'update':
-      case 'megaupdate':
-        after = updateEvent_(id, body.event || body.data || {});
+      case 'megaupdate': {
+        const updated = updateEvent_(id, body.event || body.data || {});
+        after = action === 'megaupdate'
+          ? Object.assign({}, updated, {
+              Estado: before.Estado || 'ACTIVO',
+              Fecha_Cancelacion: before.Fecha_Cancelacion || ''
+            })
+          : updated;
         changes = diffEventFields_(before, after);
         checkpoint.changed = Object.keys(changes).length > 0;
         result = { event: after };
         historyAction = 'MODIFICADO';
         break;
+      }
       case 'delete':
       case 'cancel':
         after = cancelEventRow_(located, before);
