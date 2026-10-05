@@ -5,7 +5,8 @@ const js=fs.readFileSync('dist/app.js','utf8');
 const css=fs.readFileSync('dist/styles.css','utf8');
 const requiredIds=['calendar','agenda','eventForm','eventType','eventName','eventSystem','startDate','endDate','hoursGroup','startTime','endTime','talentInput','executiveInput','availabilityGroup','detailModal','confirmModal','filterSystem','filterTalent','filterSpecialDays'];
 requiredIds.forEach(id=>assert(html.includes(`id="${id}"`),`Falta #${id}`));
-assert(js.includes("'text/plain;charset=utf-8'"),'POST debe evitar preflight en Apps Script');
+assert(js.includes('function jsonpRequest'),'La comunicación debe tener transporte JSONP resistente a CORS');
+assert(js.includes("action:'mutate'"),'Las mutaciones deben usar el transporte resistente de Apps Script');
 ['create','update','delete'].forEach(action=>assert(js.includes(`action:'${action}'`),`Falta CRUD ${action}`));
 assert(js.includes('b.innerHTML=`${esc(e.Nombre)}${isCommercializable(e)'),'El nombre debe mostrarse en cada día multidía');
 assert(js.includes("specialDays:'__holidays'"),'Solo festivos debe ser inicial');
@@ -14,6 +15,7 @@ assert(js.includes("norm(x.Tipo)==='festivo'"),'Festivo debe filtrarse exactamen
 assert(js.includes('eventRanges:indexByRange(events)'),'Los eventos multidía deben indexarse por rango');
 assert(js.includes("apiGet('bootstrap')")||js.includes("megaMode?'megabootstrap':'bootstrap'"),'Debe usarse bootstrap normal y MEGA de forma compatible');
 assert(js.includes("apiGet('version')"),'Debe usarse el endpoint ligero de versión');
+assert(js.includes("url.searchParams.set('callback',callback)"),'Las lecturas deben enviar callback JSONP');
 assert(js.includes('setInterval(checkVersion,60000)'),'La versión debe comprobarse cada 60 segundos');
 assert(js.includes("window.addEventListener('focus',checkVersion)"),'Debe sincronizar al recuperar foco');
 assert(js.includes("params.get('edit')"),'Los modos deben ser genéricos por query parameter');
