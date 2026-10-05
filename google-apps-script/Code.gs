@@ -43,15 +43,8 @@ function doGet(e) {
     const action = String((e && e.parameter && e.parameter.action) || 'bootstrap').toLowerCase();
 
     switch (action) {
-      case 'bootstrap': {
-        const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
-        return ok_({
-          events: getEvents_(ss.getSheetByName(SHEETS.EVENTS)),
-          specialDays: getSpecialDays_(ss.getSheetByName(SHEETS.SPECIAL_DAYS)),
-          config: getConfig_(ss.getSheetByName(SHEETS.CONFIG)),
-          version: getVersion_()
-        });
-      }
+      case 'bootstrap':
+        return ok_(getPublicBootstrap_());
       case 'megabootstrap':
         assertMegaAccess_(e && e.parameter && e.parameter.access);
         return ok_(getMegaBootstrap_());
@@ -493,6 +486,25 @@ function getMegaHealth_() {
       historyRows: historySheet ? Math.max(historySheet.getLastRow() - 1, 0) : 0
     }
   };
+}
+
+function getPublicBootstrap_() {
+  const version = getVersion_();
+  const cache = CacheService.getScriptCache();
+  const key = 'calendar_public_bootstrap_v1_' + version;
+  const cached = cache.get(key);
+  if (cached) {
+    try { return JSON.parse(cached); } catch (_) {}
+  }
+  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  const data = {
+    events: getEvents_(ss.getSheetByName(SHEETS.EVENTS)),
+    specialDays: getSpecialDays_(ss.getSheetByName(SHEETS.SPECIAL_DAYS)),
+    config: getConfig_(ss.getSheetByName(SHEETS.CONFIG)),
+    version: version
+  };
+  try { cache.put(key, JSON.stringify(data), 90); } catch (_) {}
+  return data;
 }
 
 function getMegaBootstrap_() {
