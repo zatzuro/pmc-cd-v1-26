@@ -12,6 +12,7 @@ const VERSION_KEY = 'CALENDAR_DATA_VERSION';
 const MEGA_ACCESS_KEY = 'CALENDAR_MEGA_ACCESS_TOKEN';
 const API_VERSION = '1.3.0-mega1';
 const HISTORY_MAX_ROWS = 500;
+let JSONP_CALLBACK_ = '';
 const CACHE = {
   CONFIG_KEY: 'calendar_config_v1',
   CONFIG_SECONDS: 600,
@@ -36,6 +37,7 @@ const MEGA_EVENT_HEADERS = EVENT_HEADERS.concat(['Estado', 'Fecha_Cancelacion'])
 const HISTORY_HEADERS = ['ID', 'Evento_ID', 'Evento_Nombre', 'Accion', 'FechaHora', 'Cambios_JSON'];
 
 function doGet(e) {
+  JSONP_CALLBACK_ = safeJsonpCallback_(e && e.parameter && e.parameter.callback);
   try {
     const action = String((e && e.parameter && e.parameter.action) || 'bootstrap').toLowerCase();
 
@@ -66,20 +68,27 @@ function doGet(e) {
         return ok_({ specialDays: getSpecialDays_(), version: getVersion_() });
       case 'config':
         return ok_({ config: getConfig_(), version: getVersion_() });
+      case 'mutate':
+        return mutate_(parseJsonPayload_(e && e.parameter && e.parameter.payload));
       default:
         throw new Error('Acción GET no válida.');
     }
   } catch (err) {
     return fail_(err);
+  } finally {
+    JSONP_CALLBACK_ = '';
   }
 }
 
 function doPost(e) {
+  return mutate_(parseBody_(e));
+}
+
+function mutate_(body) {
   const lock = LockService.getScriptLock();
   let checkpoint = null;
   try {
     lock.waitLock(10000);
-    const body = parseBody_(e);
     const action = String(body.action || '').toLowerCase();
     const mega = ['megacreate', 'megaupdate', 'cancel', 'restore', 'purge'].includes(action);
     if (mega) assertMegaAccess_(body.access);
@@ -921,6 +930,16 @@ function parseBody_(e) {
   }
 }
 
+function parseJsonPayload_(value) {
+  const raw = clean_(value);
+  if (!raw) throw new Error('Solicitud sin payload JSON.');
+  try {
+    return JSON.parse(raw);
+  } catch (_) {
+    throw new Error('Payload JSON inválido.');
+  }
+}
+
 function parseDate_(value) {
   if (value instanceof Date && !isNaN(value)) return value;
   const s = clean_(value);
@@ -977,9 +996,21 @@ function dateTimeOut_(value) {
   return Utilities.formatDate(d, TZ, "yyyy-MM-dd'T'HH:mm:ssXXX");
 }
 
+function safeJsonpCallback_(value) {
+  const callback = clean_(value);
+  if (!callback) return '';
+  return /^[A-Za-z_$][0-9A-Za-z_$]*$/.test(callback) ? callback : '';
+}
+
 function json_(payload) {
+  const body = JSON.stringify(payload);
+  if (JSONP_CALLBACK_) {
+    return ContentService
+      .createTextOutput(JSONP_CALLBACK_ + '(' + body + ');')
+      .setMimeType(ContentService.MimeType.JAVASCRIPT);
+  }
   return ContentService
-    .createTextOutput(JSON.stringify(payload))
+    .createTextOutput(body)
     .setMimeType(ContentService.MimeType.JSON);
 }
 
