@@ -7,6 +7,9 @@ on:
       - main
     paths:
       - "google-apps-script/**"
+      - "config.js"
+      - "scripts/production-smoke.cjs"
+      - ".github/workflows/apps-script-deploy.yml"
 
 permissions:
   contents: read
@@ -43,7 +46,7 @@ jobs:
           missing=0
           for var_name in CLASPRC_JSON CLASP_JSON APPS_SCRIPT_DEPLOYMENT_ID; do
             if [ -z "${!var_name}" ]; then
-              echo "::notice::${var_name} is not configured; Apps Script deployment is skipped."
+              echo "::error::${var_name} is not configured; production deployment cannot be verified."
               missing=1
             fi
           done
@@ -51,8 +54,11 @@ jobs:
           if [ "$missing" -eq 0 ]; then
             echo "ready=true" >> "$GITHUB_OUTPUT"
           else
-            echo "ready=false" >> "$GITHUB_OUTPUT"
+            exit 1
           fi
+
+      - name: Validate deployment and Web App manifest
+        run: node scripts/production-smoke.cjs --config-only
 
       - name: Install clasp
         if: steps.config.outputs.ready == 'true'
@@ -96,3 +102,6 @@ jobs:
       - name: Confirm deployment
         if: steps.config.outputs.ready == 'true'
         run: clasp list-deployments
+
+      - name: Verify public production API after deployment
+        run: node scripts/production-smoke.cjs

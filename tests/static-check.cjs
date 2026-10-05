@@ -29,3 +29,7 @@ assert(css.includes('.form-modal fieldset[hidden]{display:none!important}'),'Los
 assert(css.includes('.form-modal [hidden]{display:none!important}'),'Los grupos dinámicos ocultos deben permanecer ocultos');
 assert(css.includes('.calendar{display:block!important}.calendar[hidden]{display:none!important}'),'Móvil debe respetar la vista real');
 console.log('Frontend 1.2.0: estructura, modos, sincronización y regresiones estáticas OK');
+
+const manifest=JSON.parse(fs.readFileSync('google-apps-script/appsscript.json','utf8'));
+assert.strictEqual(manifest.webapp?.executeAs,'USER_DEPLOYING','El Web App debe ejecutar como el propietario');
+assert.strictEqual(manifest.webapp?.access,'ANYONE_ANONYMOUS','El calendario público debe conservar su Web App público');
