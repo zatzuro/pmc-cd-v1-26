@@ -682,8 +682,11 @@ function getRecentChanges_(limit, ss) {
 function assertMegaAccess_(token) {
   const supplied = clean_(token);
   const expected = PropertiesService.getScriptProperties().getProperty(MEGA_ACCESS_KEY);
-  const fallbackOk = supplied && sha256Hex_(supplied) === MEGA_FALLBACK_TOKEN_SHA256;
-  if (!supplied || (supplied !== expected && !fallbackOk)) throw new Error('Acceso MEGA no válido.');
+  if (!supplied) throw new Error('Acceso MEGA no válido.');
+  if (supplied === expected) return;
+  const canDigest = Utilities && typeof Utilities.computeDigest === 'function';
+  if (canDigest && sha256Hex_(supplied) === MEGA_FALLBACK_TOKEN_SHA256) return;
+  throw new Error('Acceso MEGA no válido.');
 }
 
 function sha256Hex_(value) {
